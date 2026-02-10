@@ -1,0 +1,23 @@
+{
+  "name": "tinylingo",
+  "version": "0.1.0",
+  "description": "A terminology and behavior memory tool for AI assistants",
+  "type": "module",
+  "bin": {
+    "tinylingo": "./dist/bin.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "tsup": "^8.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT"
+}
