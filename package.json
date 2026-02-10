@@ -1,6 +1,6 @@
 {
   "name": "tinylingo",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "A terminology and behavior memory tool for AI assistants",
   "type": "module",
   "bin": {
