@@ -1,6 +1,6 @@
 {
   "name": "tinylingo",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.0",
   "description": "A terminology and behavior memory tool for AI assistants",
   "type": "module",
   "bin": {
@@ -8,9 +8,25 @@
   },
   "scripts": {
     "build": "tsup",
+    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "keywords": [
+    "ai",
+    "terminology",
+    "glossary",
+    "memory",
+    "claude",
+    "cursor",
+    "hook"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanmika/TinyLingo.git"
+  },
+  "homepage": "https://github.com/tanmika/TinyLingo",
+  "author": "tanmika",
   "devDependencies": {
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
