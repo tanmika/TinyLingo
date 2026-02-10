@@ -39,9 +39,10 @@ export async function processHookEvent(stdinData: string): Promise<string> {
   try {
     const event = JSON.parse(stdinData);
 
-    if (event.event !== 'UserPromptSubmit') return '{}';
+    const eventName = event.hook_event_name ?? event.event;
+    if (eventName !== 'UserPromptSubmit') return '{}';
 
-    const prompt = event.data?.prompt;
+    const prompt = event.prompt ?? event.data?.prompt;
     if (!prompt) return '{}';
 
     const glossary = readGlossary();
@@ -51,9 +52,14 @@ export async function processHookEvent(stdinData: string): Promise<string> {
     if (results.length === 0) return '{}';
 
     const lines = results.map((r) => `- ${r.term}: ${r.explanation}`).join('\n');
-    const output = `<system-reminder>\n[TinyLingo]\n${lines}\n</system-reminder>`;
+    const context = `<system-reminder>\n[TinyLingo]\n${lines}\n</system-reminder>`;
 
-    return JSON.stringify({ hookSpecificOutput: output });
+    return JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: context,
+      },
+    });
   } catch {
     return '{}';
   }

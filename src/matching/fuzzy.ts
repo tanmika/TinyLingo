@@ -36,9 +36,33 @@ export function bigramJaccard(a: string, b: string): number {
 }
 
 /**
- * Perform fuzzy matching against the glossary using bigram Jaccard similarity.
- * Returns candidates whose similarity score exceeds the given threshold.
- * Results are sorted by score descending.
+ * Compute the best bigram Jaccard score between a term and any
+ * sliding window of the message. Window sizes range from
+ * term.length to term.length + 2 to allow slight length variation.
+ */
+export function slidingWindowJaccard(message: string, term: string): number {
+  const termLen = term.length;
+  if (message.length <= termLen + 2) {
+    return bigramJaccard(message, term);
+  }
+  let maxScore = 0;
+  const minSize = Math.max(2, termLen);
+  const maxSize = termLen + 2;
+  for (let size = minSize; size <= maxSize; size++) {
+    for (let i = 0; i <= message.length - size; i++) {
+      const window = message.slice(i, i + size);
+      const score = bigramJaccard(window, term);
+      if (score > maxScore) maxScore = score;
+    }
+  }
+  return maxScore;
+}
+
+/**
+ * Perform fuzzy matching against the glossary using sliding-window
+ * bigram Jaccard similarity. For each glossary term, slides a window
+ * across the message to find the best local match.
+ * Returns candidates whose score exceeds the threshold, sorted descending.
  */
 export function fuzzyMatch(
   message: string,
@@ -48,7 +72,7 @@ export function fuzzyMatch(
   if (!message) return [];
   const results: FuzzCandidate[] = [];
   for (const [term, explanation] of Object.entries(glossary)) {
-    const score = bigramJaccard(message, term);
+    const score = slidingWindowJaccard(message, term);
     if (score > threshold) {
       results.push({ term, explanation, score });
     }

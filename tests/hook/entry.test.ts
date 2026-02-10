@@ -34,11 +34,10 @@ describe('hook/entry', () => {
     const parsed = JSON.parse(output);
 
     expect(parsed).toHaveProperty('hookSpecificOutput');
-    expect(parsed.hookSpecificOutput).toContain('<system-reminder>');
-    expect(parsed.hookSpecificOutput).toContain('[TinyLingo]');
-    expect(parsed.hookSpecificOutput).toContain('提交');
-    expect(parsed.hookSpecificOutput).toContain('git commit only, no push');
-    expect(parsed.hookSpecificOutput).toContain('</system-reminder>');
+    expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('[TinyLingo]');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('提交');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('git commit only, no push');
   });
 
   it('should return empty JSON when no matches', async () => {
@@ -65,10 +64,10 @@ describe('hook/entry', () => {
     const output = await processHookEvent(input);
     const parsed = JSON.parse(output);
 
-    expect(parsed.hookSpecificOutput).toContain('提交');
-    expect(parsed.hookSpecificOutput).toContain('联调');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('提交');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('联调');
     // Should be a single system-reminder block
-    const reminderCount = (parsed.hookSpecificOutput.match(/<system-reminder>/g) || []).length;
+    const reminderCount = (parsed.hookSpecificOutput.additionalContext.match(/<system-reminder>/g) || []).length;
     expect(reminderCount).toBe(1);
   });
 
@@ -127,6 +126,39 @@ describe('hook/entry', () => {
     const output = await processHookEvent(input);
     const parsed = JSON.parse(output);
 
-    expect(parsed.hookSpecificOutput).toMatch(/- 提交: git commit only/);
+    expect(parsed.hookSpecificOutput.additionalContext).toMatch(/- 提交: git commit only/);
+  });
+
+  it('should handle Claude Code actual stdin format (hook_event_name + top-level prompt)', async () => {
+    addEntry('提交', 'git commit only');
+
+    const input = JSON.stringify({
+      session_id: 'abc-123',
+      hook_event_name: 'UserPromptSubmit',
+      prompt: '帮我提交代码',
+      cwd: '/some/path',
+    });
+
+    const output = await processHookEvent(input);
+    const parsed = JSON.parse(output);
+
+    expect(parsed).toHaveProperty('hookSpecificOutput');
+    expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('提交');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('git commit only');
+  });
+
+  it('should ignore non-UserPromptSubmit with hook_event_name format', async () => {
+    addEntry('提交', 'git commit only');
+
+    const input = JSON.stringify({
+      hook_event_name: 'SessionStart',
+      prompt: '帮我提交代码',
+    });
+
+    const output = await processHookEvent(input);
+    const parsed = JSON.parse(output);
+
+    expect(parsed).toEqual({});
   });
 });

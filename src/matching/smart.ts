@@ -33,6 +33,8 @@ ${candidateList}
 哪些术语与用户消息相关？只回复相关术语的序号（逗号分隔），如果都不相关则回复空。 /no_think`;
 
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(config.smart.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -40,7 +42,9 @@ ${candidateList}
         model: config.smart.model,
         messages: [{ role: 'user', content: prompt }],
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
 
     if (!res.ok) return [];
 

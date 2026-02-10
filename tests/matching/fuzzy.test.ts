@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bigramJaccard, fuzzyMatch } from '../../src/matching/fuzzy.js';
+import { bigramJaccard, slidingWindowJaccard, fuzzyMatch } from '../../src/matching/fuzzy.js';
 import type { Glossary } from '../../src/core/glossary.js';
 
 describe('matching/fuzzy', () => {
@@ -54,6 +54,30 @@ describe('matching/fuzzy', () => {
       // union: {ab, bc, cd, de} (4)
       // Jaccard = 2/4 = 0.5
       expect(bigramJaccard('abcd', 'bcde')).toBeCloseTo(0.5, 5);
+    });
+  });
+
+  describe('slidingWindowJaccard', () => {
+    it('should find high similarity for partial match in long message', () => {
+      // "大头类型" contains "大头" which overlaps with "大头贴"
+      const score = slidingWindowJaccard('登录区域图片全身和大头类型的认证都有问题', '大头贴');
+      expect(score).toBeGreaterThan(0.2);
+    });
+
+    it('should find high similarity for "登录区域" vs "登录模块"', () => {
+      const score = slidingWindowJaccard('登录区域图片全身和大头类型的认证都有问题', '登录模块');
+      expect(score).toBeGreaterThan(0.15);
+    });
+
+    it('should return 0 for completely unrelated content', () => {
+      const score = slidingWindowJaccard('今天天气真好阳光明媚', '登录模块');
+      expect(score).toBe(0);
+    });
+
+    it('should fall back to whole-message comparison when message is short', () => {
+      const score = slidingWindowJaccard('大头', '大头贴');
+      const direct = bigramJaccard('大头', '大头贴');
+      expect(score).toBe(direct);
     });
   });
 
