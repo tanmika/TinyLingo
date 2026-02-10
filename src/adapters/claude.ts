@@ -37,47 +37,57 @@ tinylingo record "<触发词>" "<尽可能密集的上下文信息>"
 ${END_MARKER}`;
 
 /**
- * Hook entry structure in Claude's settings.json.
+ * Individual hook command entry in Claude's settings.json.
  */
-export interface HookEntry {
+export interface HookCommand {
   type: string;
   command: string;
+  timeout?: number;
 }
 
 /**
- * Claude settings.json hook configuration structure.
+ * Hook group in Claude's settings.json.
+ * Each event maps to an array of HookGroups.
+ */
+export interface HookGroup {
+  matcher?: string;
+  hooks: HookCommand[];
+}
+
+/**
+ * Claude settings.json structure.
  */
 export interface ClaudeSettings {
   hooks?: {
-    [eventName: string]: HookEntry[];
+    [eventName: string]: HookGroup[];
   };
   [key: string]: unknown;
 }
 
 /**
- * Check if a hook entry belongs to TinyLingo.
- * Identifies by checking if the command path contains the TinyLingo scripts marker.
+ * Check if a hook group belongs to TinyLingo.
+ * Identifies by checking if any inner hook command contains the TinyLingo scripts marker.
  */
-export function isTinyLingoHook(command: string): boolean {
-  return command.includes(TINYLINGO_MARKER);
+export function isTinyLingoHookGroup(group: HookGroup): boolean {
+  return group.hooks?.some((h) => h.command?.includes(TINYLINGO_MARKER)) ?? false;
 }
 
 /**
- * Merge hooks: preserve user hooks, replace TinyLingo hooks.
+ * Merge hook groups: preserve user groups, replace TinyLingo group.
  */
-export function mergeHooks(
-  existingHooks: HookEntry[],
-  newTinyLingoHook: HookEntry
-): HookEntry[] {
-  const filtered = existingHooks.filter((h) => !isTinyLingoHook(h.command));
-  return [...filtered, newTinyLingoHook];
+export function mergeHookGroups(
+  existingGroups: HookGroup[],
+  newTinyLingoGroup: HookGroup
+): HookGroup[] {
+  const filtered = existingGroups.filter((g) => !isTinyLingoHookGroup(g));
+  return [...filtered, newTinyLingoGroup];
 }
 
 /**
- * Filter out TinyLingo hooks, keeping only user hooks.
+ * Filter out TinyLingo hook groups, keeping only user groups.
  */
-export function filterOutHooks(hooks: HookEntry[]): HookEntry[] {
-  return hooks.filter((h) => !isTinyLingoHook(h.command));
+export function filterOutHookGroups(groups: HookGroup[]): HookGroup[] {
+  return groups.filter((g) => !isTinyLingoHookGroup(g));
 }
 
 /**
@@ -112,8 +122,8 @@ export class ClaudeAdapter implements PlatformAdapter {
       const settings: ClaudeSettings = JSON.parse(
         readFileSync(this.settingsPath, 'utf-8')
       );
-      const hooks = settings.hooks?.[HOOK_EVENT] ?? [];
-      return hooks.some((h) => isTinyLingoHook(h.command));
+      const groups = settings.hooks?.[HOOK_EVENT] ?? [];
+      return groups.some((g) => isTinyLingoHookGroup(g));
     } catch {
       return false;
     }
@@ -134,11 +144,16 @@ export class ClaudeAdapter implements PlatformAdapter {
 
     if (!settings.hooks) settings.hooks = {};
     const existing = settings.hooks[HOOK_EVENT] ?? [];
-    const newHook: HookEntry = {
-      type: 'command',
-      command: `node ${scriptPath}`,
+    const newHookGroup: HookGroup = {
+      hooks: [
+        {
+          type: 'command',
+          command: `node "${scriptPath}"`,
+          timeout: 5000,
+        },
+      ],
     };
-    settings.hooks[HOOK_EVENT] = mergeHooks(existing, newHook);
+    settings.hooks[HOOK_EVENT] = mergeHookGroups(existing, newHookGroup);
     writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 
     // Inject instruction block into CLAUDE.md
@@ -160,7 +175,7 @@ export class ClaudeAdapter implements PlatformAdapter {
           readFileSync(this.settingsPath, 'utf-8')
         );
         if (settings.hooks?.[HOOK_EVENT]) {
-          const filtered = filterOutHooks(settings.hooks[HOOK_EVENT]);
+          const filtered = filterOutHookGroups(settings.hooks[HOOK_EVENT]);
           if (filtered.length === 0) {
             delete settings.hooks[HOOK_EVENT];
           } else {

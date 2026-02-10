@@ -12,10 +12,11 @@ vi.mock('node:os', async () => {
 
 import {
   ClaudeAdapter,
-  isTinyLingoHook,
-  mergeHooks,
-  filterOutHooks,
-  type HookEntry,
+  isTinyLingoHookGroup,
+  mergeHookGroups,
+  filterOutHookGroups,
+  type HookCommand,
+  type HookGroup,
   type ClaudeSettings,
 } from '../../src/adapters/claude.js';
 
@@ -32,91 +33,115 @@ describe('adapters/claude', () => {
     rmSync(TEST_HOME, { recursive: true, force: true });
   });
 
-  describe('isTinyLingoHook', () => {
-    it('should return true for TinyLingo hook command', () => {
-      expect(
-        isTinyLingoHook('node /home/user/.config/tinylingo/scripts/hook.cjs')
-      ).toBe(true);
+  describe('isTinyLingoHookGroup', () => {
+    it('should return true for TinyLingo hook group', () => {
+      const group: HookGroup = {
+        hooks: [
+          { type: 'command', command: 'node /home/user/.config/tinylingo/scripts/hook.cjs' },
+        ],
+      };
+      expect(isTinyLingoHookGroup(group)).toBe(true);
     });
 
-    it('should return false for user hook command', () => {
-      expect(isTinyLingoHook('node /home/user/my-custom-hook.js')).toBe(false);
+    it('should return false for user hook group', () => {
+      const group: HookGroup = {
+        hooks: [
+          { type: 'command', command: 'node /home/user/my-custom-hook.js' },
+        ],
+      };
+      expect(isTinyLingoHookGroup(group)).toBe(false);
     });
 
-    it('should return false for empty string', () => {
-      expect(isTinyLingoHook('')).toBe(false);
+    it('should return false for empty hooks array', () => {
+      const group: HookGroup = { hooks: [] };
+      expect(isTinyLingoHookGroup(group)).toBe(false);
     });
 
     it('should detect marker in various path formats', () => {
-      expect(
-        isTinyLingoHook('/Users/me/.config/tinylingo/scripts/entry.cjs')
-      ).toBe(true);
-      expect(
-        isTinyLingoHook('C:\\Users\\me\\.config\\tinylingo\\scripts\\entry.cjs')
-      ).toBe(false); // Only forward slash paths
+      const group: HookGroup = {
+        hooks: [
+          { type: 'command', command: '/Users/me/.config/tinylingo/scripts/entry.cjs' },
+        ],
+      };
+      expect(isTinyLingoHookGroup(group)).toBe(true);
+    });
+
+    it('should handle group with matcher', () => {
+      const group: HookGroup = {
+        matcher: 'some-matcher',
+        hooks: [
+          { type: 'command', command: 'node /home/user/.config/tinylingo/scripts/hook.cjs' },
+        ],
+      };
+      expect(isTinyLingoHookGroup(group)).toBe(true);
     });
   });
 
-  describe('mergeHooks', () => {
-    const userHook: HookEntry = {
-      type: 'command',
-      command: 'node /home/user/custom-hook.js',
+  describe('mergeHookGroups', () => {
+    const userGroup: HookGroup = {
+      hooks: [
+        { type: 'command', command: 'node /home/user/custom-hook.js' },
+      ],
     };
-    const oldTinyLingoHook: HookEntry = {
-      type: 'command',
-      command: 'node /home/user/.config/tinylingo/scripts/old-hook.cjs',
+    const oldTinyLingoGroup: HookGroup = {
+      hooks: [
+        { type: 'command', command: 'node /home/user/.config/tinylingo/scripts/old-hook.cjs' },
+      ],
     };
-    const newTinyLingoHook: HookEntry = {
-      type: 'command',
-      command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+    const newTinyLingoGroup: HookGroup = {
+      hooks: [
+        { type: 'command', command: 'node /home/user/.config/tinylingo/scripts/hook.cjs' },
+      ],
     };
 
-    it('should preserve user hooks and add new TinyLingo hook', () => {
-      const result = mergeHooks([userHook], newTinyLingoHook);
-      expect(result).toContainEqual(userHook);
-      expect(result).toContainEqual(newTinyLingoHook);
+    it('should preserve user groups and add new TinyLingo group', () => {
+      const result = mergeHookGroups([userGroup], newTinyLingoGroup);
+      expect(result).toContainEqual(userGroup);
+      expect(result).toContainEqual(newTinyLingoGroup);
     });
 
-    it('should replace existing TinyLingo hook with new one', () => {
-      const result = mergeHooks([userHook, oldTinyLingoHook], newTinyLingoHook);
-      expect(result).toContainEqual(userHook);
-      expect(result).toContainEqual(newTinyLingoHook);
-      expect(result).not.toContainEqual(oldTinyLingoHook);
+    it('should replace existing TinyLingo group with new one', () => {
+      const result = mergeHookGroups([userGroup, oldTinyLingoGroup], newTinyLingoGroup);
+      expect(result).toContainEqual(userGroup);
+      expect(result).toContainEqual(newTinyLingoGroup);
+      expect(result).not.toContainEqual(oldTinyLingoGroup);
     });
 
-    it('should handle empty existing hooks', () => {
-      const result = mergeHooks([], newTinyLingoHook);
-      expect(result).toEqual([newTinyLingoHook]);
+    it('should handle empty existing groups', () => {
+      const result = mergeHookGroups([], newTinyLingoGroup);
+      expect(result).toEqual([newTinyLingoGroup]);
     });
   });
 
-  describe('filterOutHooks', () => {
-    const userHook: HookEntry = {
-      type: 'command',
-      command: 'node /home/user/custom-hook.js',
+  describe('filterOutHookGroups', () => {
+    const userGroup: HookGroup = {
+      hooks: [
+        { type: 'command', command: 'node /home/user/custom-hook.js' },
+      ],
     };
-    const tinyLingoHook: HookEntry = {
-      type: 'command',
-      command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+    const tinyLingoGroup: HookGroup = {
+      hooks: [
+        { type: 'command', command: 'node /home/user/.config/tinylingo/scripts/hook.cjs' },
+      ],
     };
 
-    it('should remove TinyLingo hooks', () => {
-      const result = filterOutHooks([userHook, tinyLingoHook]);
-      expect(result).toEqual([userHook]);
+    it('should remove TinyLingo groups', () => {
+      const result = filterOutHookGroups([userGroup, tinyLingoGroup]);
+      expect(result).toEqual([userGroup]);
     });
 
-    it('should preserve all user hooks', () => {
-      const result = filterOutHooks([userHook]);
-      expect(result).toEqual([userHook]);
+    it('should preserve all user groups', () => {
+      const result = filterOutHookGroups([userGroup]);
+      expect(result).toEqual([userGroup]);
     });
 
-    it('should return empty array when all hooks are TinyLingo', () => {
-      const result = filterOutHooks([tinyLingoHook]);
+    it('should return empty array when all groups are TinyLingo', () => {
+      const result = filterOutHookGroups([tinyLingoGroup]);
       expect(result).toEqual([]);
     });
 
     it('should handle empty array', () => {
-      const result = filterOutHooks([]);
+      const result = filterOutHookGroups([]);
       expect(result).toEqual([]);
     });
   });
@@ -134,7 +159,6 @@ describe('adapters/claude', () => {
 
     describe('detect', () => {
       it('should return true when .claude directory exists', () => {
-        // .claude dir already created in beforeEach
         expect(adapter.detect()).toBe(true);
       });
 
@@ -153,7 +177,11 @@ describe('adapters/claude', () => {
         const settings: ClaudeSettings = {
           hooks: {
             UserPromptSubmit: [
-              { type: 'command', command: 'node /some/other/hook.js' },
+              {
+                hooks: [
+                  { type: 'command', command: 'node /some/other/hook.js' },
+                ],
+              },
             ],
           },
         };
@@ -166,8 +194,37 @@ describe('adapters/claude', () => {
           hooks: {
             UserPromptSubmit: [
               {
-                type: 'command',
-                command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+                  },
+                ],
+              },
+            ],
+          },
+        };
+        writeFileSync(settingsPath, JSON.stringify(settings));
+        expect(adapter.isInstalled()).toBe(true);
+      });
+
+      it('should handle mixed groups with existing hooks', () => {
+        const settings: ClaudeSettings = {
+          hooks: {
+            UserPromptSubmit: [
+              {
+                matcher: 'some-matcher',
+                hooks: [
+                  { type: 'command', command: 'node /other/hook.js', timeout: 5000 },
+                ],
+              },
+              {
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+                  },
+                ],
               },
             ],
           },
@@ -178,7 +235,7 @@ describe('adapters/claude', () => {
     });
 
     describe('install', () => {
-      it('should add hook to settings.json', () => {
+      it('should add hook group to settings.json', () => {
         const scriptPath = '/home/user/.config/tinylingo/scripts/hook.cjs';
         adapter.install(scriptPath);
 
@@ -186,8 +243,35 @@ describe('adapters/claude', () => {
           readFileSync(settingsPath, 'utf-8')
         );
         expect(settings.hooks).toBeDefined();
-        const hooks = settings.hooks!['UserPromptSubmit'] ?? [];
-        expect(hooks.some((h) => h.command.includes(scriptPath))).toBe(true);
+        const groups = settings.hooks!['UserPromptSubmit'] ?? [];
+        expect(
+          groups.some((g) => g.hooks.some((h) => h.command.includes(scriptPath)))
+        ).toBe(true);
+      });
+
+      it('should preserve existing hook groups from other tools', () => {
+        const existingSettings: ClaudeSettings = {
+          hooks: {
+            UserPromptSubmit: [
+              {
+                hooks: [
+                  { type: 'command', command: 'node /other/tool/hook.cjs', timeout: 5000 },
+                ],
+              },
+            ],
+          },
+        };
+        writeFileSync(settingsPath, JSON.stringify(existingSettings));
+
+        adapter.install('/home/user/.config/tinylingo/scripts/hook.cjs');
+
+        const settings: ClaudeSettings = JSON.parse(
+          readFileSync(settingsPath, 'utf-8')
+        );
+        const groups = settings.hooks!['UserPromptSubmit'];
+        expect(groups.length).toBe(2);
+        expect(groups.some((g) => g.hooks.some((h) => h.command.includes('/other/tool/')))).toBe(true);
+        expect(groups.some((g) => g.hooks.some((h) => h.command.includes('tinylingo')))).toBe(true);
       });
 
       it('should inject TINYLINGO block into CLAUDE.md', () => {
@@ -241,18 +325,41 @@ describe('adapters/claude', () => {
 
         expect(existsSync(settingsPath)).toBe(true);
       });
+
+      it('should include timeout in hook command', () => {
+        const scriptPath = '/home/user/.config/tinylingo/scripts/hook.cjs';
+        adapter.install(scriptPath);
+
+        const settings: ClaudeSettings = JSON.parse(
+          readFileSync(settingsPath, 'utf-8')
+        );
+        const groups = settings.hooks!['UserPromptSubmit'];
+        const tinyLingoGroup = groups.find((g) =>
+          g.hooks.some((h) => h.command.includes(scriptPath))
+        );
+        expect(tinyLingoGroup).toBeDefined();
+        expect(tinyLingoGroup!.hooks[0].timeout).toBe(5000);
+      });
     });
 
     describe('uninstall', () => {
-      it('should remove TinyLingo hook from settings.json', () => {
+      it('should remove TinyLingo hook group from settings.json', () => {
         const settings: ClaudeSettings = {
           hooks: {
             UserPromptSubmit: [
               {
-                type: 'command',
-                command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+                  },
+                ],
               },
-              { type: 'command', command: 'node /other/hook.js' },
+              {
+                hooks: [
+                  { type: 'command', command: 'node /other/hook.js' },
+                ],
+              },
             ],
           },
         };
@@ -263,11 +370,13 @@ describe('adapters/claude', () => {
         const updated: ClaudeSettings = JSON.parse(
           readFileSync(settingsPath, 'utf-8')
         );
-        const hooks = updated.hooks?.['UserPromptSubmit'] ?? [];
-        expect(hooks.some((h) => h.command.includes('tinylingo'))).toBe(false);
-        expect(hooks.some((h) => h.command.includes('/other/hook.js'))).toBe(
-          true
-        );
+        const groups = updated.hooks?.['UserPromptSubmit'] ?? [];
+        expect(
+          groups.some((g) => g.hooks.some((h) => h.command.includes('tinylingo')))
+        ).toBe(false);
+        expect(
+          groups.some((g) => g.hooks.some((h) => h.command.includes('/other/hook.js')))
+        ).toBe(true);
       });
 
       it('should remove TINYLINGO block from CLAUDE.md', () => {
@@ -295,13 +404,17 @@ describe('adapters/claude', () => {
         expect(() => adapter.uninstall()).not.toThrow();
       });
 
-      it('should clean up empty event key after removing all hooks', () => {
+      it('should clean up empty event key after removing all hook groups', () => {
         const settings: ClaudeSettings = {
           hooks: {
             UserPromptSubmit: [
               {
-                type: 'command',
-                command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'node /home/user/.config/tinylingo/scripts/hook.cjs',
+                  },
+                ],
               },
             ],
           },
@@ -313,9 +426,8 @@ describe('adapters/claude', () => {
         const updated: ClaudeSettings = JSON.parse(
           readFileSync(settingsPath, 'utf-8')
         );
-        // Event key with empty array should be cleaned up
-        const hooks = updated.hooks?.['UserPromptSubmit'];
-        expect(!hooks || hooks.length === 0).toBe(true);
+        const groups = updated.hooks?.['UserPromptSubmit'];
+        expect(!groups || groups.length === 0).toBe(true);
       });
     });
   });
