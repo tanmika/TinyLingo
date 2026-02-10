@@ -6,7 +6,7 @@ AI 助手的术语与行为记忆工具。录入一次，所有后续会话自�
 
 ## Problem
 
-AI assistants lack project-specific terminology context. When you say "人脸挑图" but the code uses `AICulling`, the AI can't make the connection. Every new session requires re-explanation.
+AI assistants lack project-specific terminology context. When you say "remove background" but the code uses `ChromaKey`, the AI can't make the connection. Every new session requires re-explanation.
 
 ## Solution
 
@@ -25,7 +25,7 @@ tinylingo install
 
 ```bash
 # Terminology mapping
-tinylingo record "智能抠图" "ProjectA background removal module, class BGRemover, at src/modules/bgremove/"
+tinylingo record "remove background" "ChromaKey module, class ChromaKeyer, at src/modules/chromakey/"
 
 # Behavioral correction
 tinylingo record "commit" "Do not run git push after git commit, let the user decide"
@@ -37,14 +37,14 @@ AI assistants can also call `tinylingo record` automatically when they detect mi
 
 ```bash
 tinylingo list              # List all entries
-tinylingo remove "智能抠图"  # Remove an entry
+tinylingo remove "remove background"  # Remove an entry
 ```
 
 ### Test matching
 
 ```bash
-tinylingo match "抠图功能有bug"
-# [exact] 智能抠图 → ProjectA background removal module...
+tinylingo match "background removal has a bug"
+# [exact] remove background → ChromaKey module...
 ```
 
 ### Configuration
