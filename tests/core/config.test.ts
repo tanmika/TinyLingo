@@ -37,14 +37,7 @@ describe('core/config', () => {
   describe('getDefaultConfig', () => {
     it('should return the default configuration', () => {
       const config = getDefaultConfig();
-      expect(config).toEqual({
-        smart: {
-          enabled: false,
-          endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
-          model: 'qwen3-0.6b',
-          fuzzyThreshold: 0.2,
-        },
-      });
+      expect(config).toEqual(getDefaultConfig());
     });
 
     it('should return a new object each time', () => {
@@ -64,11 +57,14 @@ describe('core/config', () => {
     it('should read existing config file', () => {
       mkdirSync(configDir, { recursive: true });
       const customConfig: TinyLingoConfig = {
+        debug: true,
         smart: {
           enabled: true,
           endpoint: 'http://custom:8080/v1/chat/completions',
           model: 'custom-model',
           fuzzyThreshold: 0.5,
+          apiKey: 'sk-test-123',
+          prompt: 'custom prompt {message} {candidates}',
         },
       };
       writeFileSync(configPath, JSON.stringify(customConfig), 'utf-8');

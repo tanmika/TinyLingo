@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { smartMatch } from '../../src/matching/smart.js';
+import { smartMatch, parseIndices } from '../../src/matching/smart.js';
 import type { FuzzCandidate } from '../../src/matching/types.js';
 import type { TinyLingoConfig } from '../../src/core/config.js';
 
@@ -14,6 +14,8 @@ describe('matching/smart', () => {
       endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
       model: 'qwen3-0.6b',
       fuzzyThreshold: 0.2,
+      apiKey: '',
+      prompt: '候选术语:\n{candidates}\n\n用户消息: "{message}"\n\n回复相关术语序号: {"relevant": [序号]}\n都不相关: {"relevant": []}\n/no_think',
     },
   };
 
@@ -35,7 +37,7 @@ describe('matching/smart', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: '1' } }],
+        choices: [{ message: { content: '{"relevant": [1]}' } }],
       }),
     });
 
@@ -51,13 +53,15 @@ describe('matching/smart', () => {
     expect(body.model).toBe(config.smart.model);
     expect(body.messages).toBeDefined();
     expect(Array.isArray(body.messages)).toBe(true);
+    expect(body.temperature).toBe(0);
+    expect(body.max_tokens).toBe(32);
   });
 
   it('should include /no_think in the prompt', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: '1' } }],
+        choices: [{ message: { content: '{"relevant": [1]}' } }],
       }),
     });
 
@@ -69,11 +73,10 @@ describe('matching/smart', () => {
   });
 
   it('should parse LLM response and return confirmed matches', async () => {
-    // LLM returns indices "1,2" meaning candidates[0] and candidates[1]
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: '1,2' } }],
+        choices: [{ message: { content: '{"relevant": [1, 2]}' } }],
       }),
     });
 
@@ -132,5 +135,45 @@ describe('matching/smart', () => {
     const results = await smartMatch('test', candidates, config);
     // Should not throw, return empty or partial results
     expect(Array.isArray(results)).toBe(true);
+  });
+
+  describe('parseIndices', () => {
+    it('should parse JSON format {"relevant": [1, 2]}', () => {
+      expect(parseIndices('{"relevant": [1, 2]}', 3)).toEqual([1, 2]);
+    });
+
+    it('should parse JSON with empty array', () => {
+      expect(parseIndices('{"relevant": []}', 3)).toEqual([]);
+    });
+
+    it('should parse JSON wrapped in extra text', () => {
+      expect(parseIndices('The relevant ones are {"relevant": [1, 3]}', 3)).toEqual([1, 3]);
+    });
+
+    it('should fallback to plain text number extraction', () => {
+      expect(parseIndices('1, 2', 3)).toEqual([1, 2]);
+    });
+
+    it('should fallback to single number', () => {
+      expect(parseIndices('1', 3)).toEqual([1]);
+    });
+
+    it('should filter out-of-range indices', () => {
+      expect(parseIndices('{"relevant": [0, 1, 5]}', 3)).toEqual([1]);
+    });
+
+    it('should return empty for non-numeric text', () => {
+      expect(parseIndices('no matches found', 3)).toEqual([]);
+    });
+
+    it('should handle <think> blocks and markdown code fences', () => {
+      const content = '<think>\n\n</think>\n\n```json\n{"relevant": ["1", "2"]}\n```';
+      expect(parseIndices(content, 3)).toEqual([1, 2]);
+    });
+
+    it('should handle JSON with extra fields from LLM', () => {
+      const content = '{"relevant": [1], "disclaimer": "some text"}';
+      expect(parseIndices(content, 3)).toEqual([1]);
+    });
   });
 });

@@ -29,6 +29,13 @@ export function getConfigPath(): string {
 }
 
 /**
+ * Get the debug log file path: ~/.config/tinylingo/debug.log
+ */
+export function getLogPath(): string {
+  return join(getConfigDir(), 'debug.log');
+}
+
+/**
  * Get the scripts directory path: ~/.config/tinylingo/scripts/
  * Creates the directory if it doesn't exist.
  */

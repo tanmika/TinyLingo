@@ -1,6 +1,7 @@
 import { readGlossary } from '../core/glossary.js';
 import { readConfig } from '../core/config.js';
 import { matchAll } from '../matching/pipeline.js';
+import { setDebug } from '../core/logger.js';
 
 /**
  * Process a hook event from stdin.
@@ -47,6 +48,7 @@ export async function processHookEvent(stdinData: string): Promise<string> {
 
     const glossary = readGlossary();
     const config = readConfig();
+    setDebug(config.debug);
     const results = await matchAll(prompt, glossary, config);
 
     if (results.length === 0) return '{}';

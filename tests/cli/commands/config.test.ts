@@ -57,4 +57,37 @@ describe('cli/commands/config', () => {
     const val = getConfigValue('smart.fuzzyThreshold');
     expect(val).toBe(0.5);
   });
+
+  it('should get value with explicit "get" subcommand', () => {
+    writeConfig(getDefaultConfig());
+
+    const output = runConfig(['get', 'smart.model']);
+    expect(output).toBe('qwen3-0.6b');
+  });
+
+  it('should display all config with "get" and no path', () => {
+    const output = runConfig(['get']);
+    expect(output).toContain('smart');
+  });
+
+  it('should set value with explicit "set" subcommand', () => {
+    runConfig(['set', 'smart.enabled', 'true']);
+
+    const val = getConfigValue('smart.enabled');
+    expect(val).toBe(true);
+  });
+
+  it('should return usage when "set" has no value', () => {
+    const output = runConfig(['set', 'smart.enabled']);
+    expect(output).toContain('Usage');
+  });
+
+  it('should not write "get" as a config key', () => {
+    writeConfig(getDefaultConfig());
+
+    runConfig(['get', 'smart.prompt']);
+
+    const val = getConfigValue('get');
+    expect(val).toBeUndefined();
+  });
 });

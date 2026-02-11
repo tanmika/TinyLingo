@@ -4,6 +4,7 @@ import type { TinyLingoConfig } from '../core/config.js';
 import { exactMatch } from './exact.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { smartMatch } from './smart.js';
+import { debugLog } from '../core/logger.js';
 
 /**
  * Run the full matching pipeline:
@@ -23,9 +24,15 @@ export async function matchAll(
   glossary: Glossary,
   config: TinyLingoConfig
 ): Promise<MatchResult[]> {
-  const exactResults = exactMatch(message, glossary);
+  debugLog('pipeline', { message, glossaryKeys: Object.keys(glossary) });
 
-  if (!config.smart.enabled) return exactResults;
+  const exactResults = exactMatch(message, glossary);
+  debugLog('exact', { matches: exactResults.map((r) => r.term) });
+
+  if (!config.smart.enabled) {
+    debugLog('pipeline', { mode: 'exact-only', results: exactResults.map((r) => r.term) });
+    return exactResults;
+  }
 
   const exactTerms = new Set(exactResults.map((r) => r.term));
 
@@ -38,7 +45,15 @@ export async function matchAll(
   }
 
   const fuzzCandidates = fuzzyMatch(message, remaining, config.smart.fuzzyThreshold);
-  if (fuzzCandidates.length === 0) return exactResults;
+  debugLog('fuzzy', {
+    threshold: config.smart.fuzzyThreshold,
+    candidates: fuzzCandidates.map((c) => ({ term: c.term, score: c.score })),
+  });
+
+  if (fuzzCandidates.length === 0) {
+    debugLog('pipeline', { mode: 'exact+smart', results: exactResults.map((r) => r.term) });
+    return exactResults;
+  }
 
   const smartResults = await smartMatch(message, fuzzCandidates, config);
 
@@ -52,5 +67,6 @@ export async function matchAll(
     }
   }
 
+  debugLog('pipeline', { mode: 'exact+smart', results: merged.map((r) => `${r.term}(${r.source})`) });
   return merged;
 }

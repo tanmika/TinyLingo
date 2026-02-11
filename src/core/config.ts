@@ -5,11 +5,14 @@ import { getConfigPath, getConfigDir } from './paths.js';
  * TinyLingo configuration structure.
  */
 export interface TinyLingoConfig {
+  debug: boolean;
   smart: {
     enabled: boolean;
     endpoint: string;
     model: string;
     fuzzyThreshold: number;
+    apiKey: string;
+    prompt: string;
   };
 }
 
@@ -18,11 +21,14 @@ export interface TinyLingoConfig {
  */
 export function getDefaultConfig(): TinyLingoConfig {
   return {
+    debug: false,
     smart: {
       enabled: false,
       endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
       model: 'qwen3-0.6b',
       fuzzyThreshold: 0.2,
+      apiKey: '',
+      prompt: '候选术语:\n{candidates}\n\n用户消息: "{message}"\n\n回复相关术语序号: {\"relevant\": [序号]}\n都不相关: {\"relevant\": []}\n/no_think',
     },
   };
 }
@@ -38,6 +44,7 @@ export function readConfig(): TinyLingoConfig {
   if (!existsSync(p)) return defaults;
   const stored = JSON.parse(readFileSync(p, 'utf-8'));
   return {
+    debug: stored.debug ?? defaults.debug,
     smart: { ...defaults.smart, ...stored.smart },
   };
 }

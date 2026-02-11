@@ -1,5 +1,6 @@
 import type { MatchResult, FuzzCandidate } from './types.js';
 import type { TinyLingoConfig } from '../core/config.js';
+import { debugLog } from '../core/logger.js';
 
 /**
  * Perform smart matching using a local LLM API.
@@ -25,44 +26,90 @@ export async function smartMatch(
     .map((c, i) => `${i + 1}. ${c.term}: ${c.explanation}`)
     .join('\n');
 
-  const prompt = `用户消息: "${message}"
-
-以下是候选术语:
-${candidateList}
-
-哪些术语与用户消息相关？只回复相关术语的序号（逗号分隔），如果都不相关则回复空。 /no_think`;
+  const prompt = config.smart.prompt
+    .replace(/\{message\}/g, message)
+    .replace(/\{candidates\}/g, candidateList);
 
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (config.smart.apiKey) {
+      headers['Authorization'] = `Bearer ${config.smart.apiKey}`;
+    }
+
+    const t0 = Date.now();
     const res = await fetch(config.smart.endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         model: config.smart.model,
         messages: [{ role: 'user', content: prompt }],
+        temperature: 0,
+        max_tokens: 32,
       }),
       signal: controller.signal,
     });
     clearTimeout(timer);
+    const latencyMs = Date.now() - t0;
 
-    if (!res.ok) return [];
+    if (!res.ok) {
+      debugLog('smart', { error: `HTTP ${res.status}`, latencyMs });
+      return [];
+    }
 
     const data = await res.json();
     const content: string = data?.choices?.[0]?.message?.content ?? '';
+
+    debugLog('smart', {
+      fuzzyCandidates: candidates.map((c) => ({ term: c.term, score: c.score })),
+      llmResponse: content,
+      latencyMs,
+    });
+
     if (!content.trim()) return [];
 
-    const indices = content
-      .split(/[,，\s]+/)
-      .map((s: string) => parseInt(s.trim(), 10))
-      .filter((n: number) => !isNaN(n) && n >= 1 && n <= candidates.length);
+    const indices = parseIndices(content, candidates.length);
 
     return indices.map((i: number) => ({
       term: candidates[i - 1].term,
       explanation: candidates[i - 1].explanation,
       source: 'smart' as const,
     }));
-  } catch {
+  } catch (err) {
+    debugLog('smart', { error: String(err) });
     return [];
   }
+}
+
+/**
+ * Parse LLM response to extract candidate indices.
+ * Tries JSON format first ({"relevant": [1, 2]}),
+ * falls back to extracting numbers from plain text.
+ */
+export function parseIndices(content: string, maxIndex: number): number[] {
+  // Strip <think> blocks and markdown code fences
+  let cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '');
+  cleaned = cleaned.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim();
+
+  // Try JSON: {"relevant": [1, 2]}
+  try {
+    const jsonMatch = cleaned.match(/\{[\s\S]*"relevant"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed.relevant)) {
+        return parsed.relevant
+          .map((n: unknown) => typeof n === 'number' ? n : parseInt(String(n), 10))
+          .filter((n: number) => !isNaN(n) && n >= 1 && n <= maxIndex);
+      }
+    }
+  } catch {
+    // fall through to plain text parsing
+  }
+
+  // Fallback: extract numbers from text
+  return cleaned
+    .split(/[,，\s]+/)
+    .map((s: string) => parseInt(s.trim(), 10))
+    .filter((n: number) => !isNaN(n) && n >= 1 && n <= maxIndex);
 }
