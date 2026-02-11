@@ -17,6 +17,7 @@ import {
   readGlossary,
   writeGlossary,
   addEntry,
+  updateEntry,
   removeEntry,
   listEntries,
   type Glossary,
@@ -85,19 +86,22 @@ describe('core/glossary', () => {
   });
 
   describe('addEntry', () => {
-    it('should add a new entry', () => {
-      addEntry('提交', 'git commit only');
+    it('should add a new entry and return added status', () => {
+      const result = addEntry('提交', 'git commit only');
 
+      expect(result.status).toBe('added');
       const glossary = readGlossary();
       expect(glossary['提交']).toBe('git commit only');
     });
 
-    it('should update an existing entry', () => {
+    it('should refuse to overwrite existing entry', () => {
       addEntry('提交', 'old explanation');
-      addEntry('提交', 'new explanation');
+      const result = addEntry('提交', 'new explanation');
 
+      expect(result.status).toBe('exists');
+      expect(result.oldValue).toBe('old explanation');
       const glossary = readGlossary();
-      expect(glossary['提交']).toBe('new explanation');
+      expect(glossary['提交']).toBe('old explanation');
     });
 
     it('should preserve existing entries when adding new one', () => {
@@ -119,6 +123,21 @@ describe('core/glossary', () => {
       addEntry('term', '');
       const glossary = readGlossary();
       expect(glossary['term']).toBe('');
+    });
+  });
+
+  describe('updateEntry', () => {
+    it('should add new entry and return undefined', () => {
+      const old = updateEntry('提交', 'value');
+      expect(old).toBeUndefined();
+      expect(readGlossary()['提交']).toBe('value');
+    });
+
+    it('should overwrite existing entry and return old value', () => {
+      addEntry('提交', 'old');
+      const old = updateEntry('提交', 'new');
+      expect(old).toBe('old');
+      expect(readGlossary()['提交']).toBe('new');
     });
   });
 

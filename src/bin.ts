@@ -51,7 +51,7 @@ async function main(): Promise<void> {
 
     switch (parsed.command) {
       case 'record':
-        runRecord(parsed.args);
+        console.log(runRecord(parsed.args));
         break;
       case 'remove':
         runRemove(parsed.args);

@@ -23,18 +23,41 @@ describe('cli/commands/record', () => {
   });
 
   it('should add a new glossary entry', () => {
-    runRecord(['提交', 'git commit only']);
+    const output = runRecord(['提交', 'git commit only']);
 
     const glossary = readGlossary();
     expect(glossary['提交']).toBe('git commit only');
+    expect(output).toContain('Added');
   });
 
-  it('should update an existing glossary entry', () => {
+  it('should refuse to overwrite existing entry', () => {
     runRecord(['提交', 'old']);
-    runRecord(['提交', 'new']);
+    const output = runRecord(['提交', 'new']);
+
+    const glossary = readGlossary();
+    expect(glossary['提交']).toBe('old');
+    expect(output).toContain('Already exists');
+    expect(output).toContain('old');
+    expect(output).toContain('--force');
+  });
+
+  it('should overwrite with --force', () => {
+    runRecord(['提交', 'old']);
+    const output = runRecord(['--force', '提交', 'new']);
 
     const glossary = readGlossary();
     expect(glossary['提交']).toBe('new');
+    expect(output).toContain('Updated');
+    expect(output).toContain('old');
+    expect(output).toContain('new');
+  });
+
+  it('should add new entry with --force when not exists', () => {
+    const output = runRecord(['--force', '提交', 'value']);
+
+    const glossary = readGlossary();
+    expect(glossary['提交']).toBe('value');
+    expect(output).toContain('Added');
   });
 
   it('should throw when no arguments provided', () => {

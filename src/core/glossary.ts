@@ -27,12 +27,37 @@ export function writeGlossary(glossary: Glossary): void {
 }
 
 /**
- * Add or update a glossary entry.
+ * Result of an add operation.
  */
-export function addEntry(key: string, value: string): void {
+export interface AddResult {
+  status: 'added' | 'exists';
+  oldValue?: string;
+}
+
+/**
+ * Add a glossary entry. Refuses if the key already exists.
+ * Returns status and old value if exists.
+ */
+export function addEntry(key: string, value: string): AddResult {
   const glossary = readGlossary();
+  if (key in glossary) {
+    return { status: 'exists', oldValue: glossary[key] };
+  }
   glossary[key] = value;
   writeGlossary(glossary);
+  return { status: 'added' };
+}
+
+/**
+ * Force-update a glossary entry regardless of existence.
+ * Returns the old value if it existed.
+ */
+export function updateEntry(key: string, value: string): string | undefined {
+  const glossary = readGlossary();
+  const old = glossary[key];
+  glossary[key] = value;
+  writeGlossary(glossary);
+  return old;
 }
 
 /**
