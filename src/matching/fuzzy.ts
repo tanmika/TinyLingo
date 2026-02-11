@@ -1,6 +1,8 @@
 import type { FuzzCandidate } from './types.js';
 import type { Glossary } from '../core/glossary.js';
 
+const MAX_CANDIDATES = 12;
+
 function getBigrams(s: string): Map<string, number> {
   const bigrams = new Map<string, number>();
   for (let i = 0; i < s.length - 1; i++) {
@@ -36,9 +38,57 @@ export function bigramJaccard(a: string, b: string): number {
 }
 
 /**
+ * Check if a term is ASCII-based (English words, alphanumeric identifiers).
+ * These terms should be matched at word level, not character level.
+ */
+export function isAsciiTerm(term: string): boolean {
+  return /^[a-zA-Z0-9_\-.]+$/.test(term);
+}
+
+/**
+ * Extract word tokens from a message (English words, alphanumeric sequences).
+ */
+function extractWords(message: string): string[] {
+  return message.match(/[a-zA-Z0-9_\-.]+/g) || [];
+}
+
+/**
+ * Minimum number of shared bigrams required for a positive score in word-level
+ * matching. Prevents single-bigram accidents (e.g. "undo" matching "godot" via "do").
+ */
+const MIN_BIGRAM_OVERLAP = 2;
+
+/**
+ * For ASCII terms: compare against individual words extracted from the message.
+ * Uses case-insensitive bigramJaccard comparison.
+ * Requires at least MIN_BIGRAM_OVERLAP shared bigrams to produce a positive score.
+ */
+export function wordLevelJaccard(message: string, term: string): number {
+  const words = extractWords(message);
+  if (words.length === 0) return 0;
+  const termLower = term.toLowerCase();
+  const termBigrams = getBigrams(termLower);
+  let maxScore = 0;
+  for (const word of words) {
+    const wordLower = word.toLowerCase();
+    const wordBigrams = getBigrams(wordLower);
+    let overlap = 0;
+    for (const [key, count] of termBigrams) {
+      overlap += Math.min(count, wordBigrams.get(key) || 0);
+    }
+    if (overlap < MIN_BIGRAM_OVERLAP) continue;
+    const score = bigramJaccard(wordLower, termLower);
+    if (score > maxScore) maxScore = score;
+  }
+  return maxScore;
+}
+
+/**
  * Compute the best bigram Jaccard score between a term and any
  * sliding window of the message. Window sizes range from
  * term.length to term.length + 2 to allow slight length variation.
+ *
+ * Used for CJK terms where character-level bigrams are meaningful.
  */
 export function slidingWindowJaccard(message: string, term: string): number {
   const termLen = term.length;
@@ -59,10 +109,23 @@ export function slidingWindowJaccard(message: string, term: string): number {
 }
 
 /**
- * Perform fuzzy matching against the glossary using sliding-window
- * bigram Jaccard similarity. For each glossary term, slides a window
- * across the message to find the best local match.
- * Returns candidates whose score exceeds the threshold, sorted descending.
+ * Compute fuzzy similarity between a message and a term.
+ * Automatically selects matching strategy based on term type:
+ * - ASCII terms (English/alphanumeric): word-level comparison
+ * - CJK terms: character-level sliding window bigram
+ */
+export function termScore(message: string, term: string): number {
+  return isAsciiTerm(term)
+    ? wordLevelJaccard(message, term)
+    : slidingWindowJaccard(message, term);
+}
+
+/**
+ * Perform fuzzy matching against the glossary.
+ * Uses word-level matching for ASCII terms and sliding-window
+ * bigram Jaccard for CJK terms.
+ * Returns up to MAX_CANDIDATES candidates whose score exceeds the threshold,
+ * sorted descending.
  */
 export function fuzzyMatch(
   message: string,
@@ -72,11 +135,11 @@ export function fuzzyMatch(
   if (!message) return [];
   const results: FuzzCandidate[] = [];
   for (const [term, explanation] of Object.entries(glossary)) {
-    const score = slidingWindowJaccard(message, term);
+    const score = termScore(message, term);
     if (score > threshold) {
       results.push({ term, explanation, score });
     }
   }
   results.sort((a, b) => b.score - a.score);
-  return results;
+  return results.slice(0, MAX_CANDIDATES);
 }

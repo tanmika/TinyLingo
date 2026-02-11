@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bigramJaccard, slidingWindowJaccard, fuzzyMatch } from '../../src/matching/fuzzy.js';
+import { bigramJaccard, slidingWindowJaccard, wordLevelJaccard, isAsciiTerm, termScore, fuzzyMatch } from '../../src/matching/fuzzy.js';
 import type { Glossary } from '../../src/core/glossary.js';
 
 describe('matching/fuzzy', () => {
@@ -81,6 +81,77 @@ describe('matching/fuzzy', () => {
     });
   });
 
+  describe('isAsciiTerm', () => {
+    it('should return true for English words', () => {
+      expect(isAsciiTerm('godot')).toBe(true);
+      expect(isAsciiTerm('React')).toBe(true);
+    });
+
+    it('should return true for alphanumeric identifiers', () => {
+      expect(isAsciiTerm('h264')).toBe(true);
+      expect(isAsciiTerm('utf8')).toBe(true);
+      expect(isAsciiTerm('arm64-v8a')).toBe(true);
+      expect(isAsciiTerm('node_modules')).toBe(true);
+    });
+
+    it('should return false for Chinese terms', () => {
+      expect(isAsciiTerm('排查问题')).toBe(false);
+      expect(isAsciiTerm('提交')).toBe(false);
+    });
+
+    it('should return false for mixed CJK+ASCII terms', () => {
+      expect(isAsciiTerm('godot引擎')).toBe(false);
+    });
+  });
+
+  describe('wordLevelJaccard', () => {
+    it('should match exact English word in message', () => {
+      const score = wordLevelJaccard('look at godot source code', 'godot');
+      expect(score).toBe(1);
+    });
+
+    it('should match case-insensitively', () => {
+      const score = wordLevelJaccard('check Godot engine', 'godot');
+      expect(score).toBe(1);
+    });
+
+    it('should NOT match unrelated words sharing a bigram', () => {
+      // "undo" shares bigram "do" with "godot" but should get low score
+      const score = wordLevelJaccard('484: bhl push undo type 2', 'godot');
+      // 1/6 ≈ 0.167 — much lower than sliding window and below practical threshold
+      expect(score).toBeLessThan(0.2);
+    });
+
+    it('should NOT match "decode" against "godot"', () => {
+      const score = wordLevelJaccard('decodeJsonFile 9264', 'godot');
+      expect(score).toBeLessThan(0.2);
+    });
+
+    it('should return 0 for pure Chinese message against English term', () => {
+      const score = wordLevelJaccard('编译通过，我需要测试什么？', 'godot');
+      expect(score).toBe(0);
+    });
+
+    it('should match similar words (typos)', () => {
+      // "godot4" vs "godot" should score high
+      const score = wordLevelJaccard('using godot4 engine', 'godot');
+      expect(score).toBeGreaterThan(0.5);
+    });
+  });
+
+  describe('termScore', () => {
+    it('should use word-level matching for ASCII terms', () => {
+      // "undo" in message should NOT significantly match "godot"
+      const score = termScore('484: bhl push undo type 2', 'godot');
+      expect(score).toBeLessThan(0.2);
+    });
+
+    it('should use sliding window for CJK terms', () => {
+      const score = termScore('登录区域图片全身和大头类型的认证都有问题', '大头贴');
+      expect(score).toBeGreaterThan(0.2);
+    });
+  });
+
   describe('fuzzyMatch', () => {
     const glossary: Glossary = {
       '智能抠图': 'BGRemover module',
@@ -129,6 +200,27 @@ describe('matching/fuzzy', () => {
       for (const r of results) {
         expect(r.score).toBeGreaterThan(0.1);
       }
+    });
+
+    it('should limit candidates to 12', () => {
+      // Create a large glossary with many similar CJK terms
+      const bigGlossary: Glossary = {};
+      for (let i = 0; i < 20; i++) {
+        bigGlossary[`抠图功能${i}`] = `explanation ${i}`;
+      }
+      const results = fuzzyMatch('抠图', bigGlossary, 0.01);
+      expect(results.length).toBeLessThanOrEqual(12);
+    });
+
+    it('should use word-level matching for English terms in glossary', () => {
+      const mixed: Glossary = {
+        godot: 'game engine reference at /path/to/godot',
+        '提交': 'git commit only',
+      };
+      // "undo" shares a bigram with "godot" but word-level matching should give low score
+      const results = fuzzyMatch('484: bhl push undo type 2', mixed, 0.2);
+      const godotResult = results.find((r) => r.term === 'godot');
+      expect(godotResult).toBeUndefined();
     });
   });
 });
